@@ -1,0 +1,8 @@
+spec:
+---
+.run-if-unprotected:
+  rules:
+    - if: $CI_COMMIT_BRANCH && $CI_COMMIT_REF_PROTECTED == "false" && $CI_OPEN_MERGE_REQUESTS && $CI_PIPELINE_SOURCE == "push"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_SOURCE_BRANCH_PROTECTED == "false"
+    - if: $CI_COMMIT_BRANCH && $CI_COMMIT_REF_PROTECTED == "false"

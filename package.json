@@ -1,0 +1,26 @@
+{
+  "scripts": {
+    "prepare": "husky",
+    "format": "npm run format:files",
+    "format:files": "prettier --ignore-unknown --write .",
+    "lint": "npm run lint:markdown && npm run lint:files",
+    "lint:markdown": "remark . --quiet --frail",
+    "lint:files": "prettier --ignore-unknown --check ."
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^20.1.0",
+    "@commitlint/config-conventional": "^20.0.0",
+    "@engineering/npm-dev-tools": "^2.0.1",
+    "@semantic-release/exec": "^7.1.0",
+    "@semantic-release/gitlab": "^13.2.9",
+    "conventional-changelog-conventionalcommits": "^9.1.0",
+    "husky": "^9.1.7",
+    "prettier": "^3.6.2",
+    "remark": "^15.0.1",
+    "remark-cli": "^12.0.1",
+    "remark-lint": "^10.0.1",
+    "remark-lint-no-dead-urls": "^2.0.1",
+    "remark-validate-links": "^13.1.0",
+    "semantic-release": "^24.2.9"
+  }
+}

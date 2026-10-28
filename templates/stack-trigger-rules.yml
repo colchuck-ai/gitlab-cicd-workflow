@@ -1,0 +1,125 @@
+spec:
+  inputs:
+    stack:
+      type: string
+      description: "The stack name to use for path filtering and conditional execution"
+    changes-paths:
+      type: array
+      description: "Array of file paths to check for changes that would trigger this stack's pipeline"
+    compare-to:
+      type: string
+      description: "The branch or tag to compare changes against (default: $CI_DEFAULT_BRANCH)"
+      default: $CI_DEFAULT_BRANCH
+---
+# Stack Trigger Rules Component
+#
+# This component provides rules for conditionally triggering stack-specific pipelines
+# based on various conditions including manual triggers, file changes, and pipeline sources.
+#
+# USAGE:
+# ------
+# Include this component in your pipeline and extend from it:
+#
+# ```yaml
+# include:
+#   - local: .gitlab/stack-trigger-rules.gitlab-ci.yml
+#     inputs:
+#       stack: core
+#       changes-paths:
+#         - "environments/*/multi/global/core/**/*.tf"
+#         - "modules/multi-global-core/**/*.tf"
+#
+# stages:
+#   - stack-triggers
+# trigger-core:
+#   stage: stack-triggers
+#   extends: .stack-trigger-rules:core
+#   trigger:
+#     include: .gitlab/core.gitlab-ci.yml
+# ```
+#
+# BEHAVIOR:
+# --------
+#
+# 1. PIPELINE TRIGGER CONDITIONS:
+#    - When RUN_STACK variable is defined, run pipelines for stacks matching this RE2 pattern
+#      - Example: RUN_STACK=/core/ will run the core stack pipeline
+#      - Note: Regex is case-sensitive by default
+#    - When RUN_STACK is not defined or empty, only run pipelines for stacks with detected file changes
+#    - Never run pipelines for branches that have open merge requests (avoid duplicates)
+#
+# 2. PIPELINE SOURCE HANDLING:
+#    - Tag Pipelines: Never run
+#    - Manual Triggers (web): Run for stacks matching RUN_STACK or with detected changes against default branch
+#    - API Triggers: Run for stacks matching RUN_STACK or with detected changes against default branch
+#    - Merge Request Events: Run for all stacks with detected changes in the source branch
+#    - Push Events: Run for stacks with detected changes
+#    - Scheduled Pipelines: Only run for stacks matching RUN_STACK pattern
+#
+# 3. BRANCH-SPECIFIC BEHAVIOR:
+#    - Protected Branches: Treated as production-ready branches
+#    - Non-Protected Branches: Treated as development branches
+#    - Branch comparison is configurable via the compare-to parameter
+#
+# 4. CHANGE DETECTION:
+#    - Uses provided changes-paths input to determine which files indicate a stack has changed
+#    - For non-push events (web, API), compares changes against default branch
+#    - Skips pipeline entirely if no changes detected and not triggered by RUN_STACK
+#
+# 5. RULE EVALUATION ORDER:
+#    1. Check if RUN_STACK matches stack name
+#    2. Skip tag pipelines
+#    3. Handle scheduled pipelines (require RUN_STACK match)
+#    4. Handle web/API triggers without RUN_STACK (use change detection)
+#    5. Handle merge request events (use change detection)
+#    6. Skip branches with open MRs
+#    7. Handle non-default branches (use change detection)
+#    8. Handle default branch (use change detection)
+#    9. Skip all other cases
+
+.stack-trigger-rules:$[[ inputs.stack ]]:
+  rules:
+    # Run if explicitly triggered via RUN_STACK variable (RE2 pattern match)
+    - if: $RUN_STACK && "$[[ inputs.stack ]]" =~ $RUN_STACK
+
+    # Never run for tag pipelines
+    - if: $CI_PIPELINE_SOURCE == "tag"
+      when: never
+
+    # For scheduled pipelines, only run if RUN_STACK is defined and matches
+    # Scheduled pipelines don't have a Git push event, so we need to filter them explicitly
+    - if: $CI_PIPELINE_SOURCE == "schedule" && (($RUN_STACK == null || $RUN_STACK == "") || "$[[ inputs.stack ]]" =~ $RUN_STACK)
+      when: never
+
+    # For web UI (manual) triggers without RUN_STACK, use change detection against default branch
+    - if: $CI_PIPELINE_SOURCE == "web" && ($RUN_STACK == null || $RUN_STACK == "")
+      changes:
+        paths: $[[ inputs.changes-paths ]]
+        compare_to: $[[ inputs.compare-to ]]
+
+    # For API triggers without RUN_STACK, use change detection against default branch
+    - if: $CI_PIPELINE_SOURCE == "api" && ($RUN_STACK == null || $RUN_STACK == "")
+      changes:
+        paths: $[[ inputs.changes-paths ]]
+        compare_to: $[[ inputs.compare-to ]]
+
+    # Run for merge request events when stack files have changed
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: $[[ inputs.changes-paths ]]
+        compare_to: $[[ inputs.compare-to ]]
+
+    # Skip for branches with open merge requests (avoid duplicates)
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+
+    # Run for non-default branches when stack files have changed
+    - if: $CI_COMMIT_BRANCH && $CI_COMMIT_REF_PROTECTED == "false"
+      changes:
+        paths: $[[ inputs.changes-paths ]]
+        compare_to: $[[ inputs.compare-to ]]
+
+    # Run for default branch when stack files have changed
+    - if: $CI_COMMIT_BRANCH && $CI_COMMIT_REF_PROTECTED == "true"
+      changes:
+        paths: $[[ inputs.changes-paths ]]

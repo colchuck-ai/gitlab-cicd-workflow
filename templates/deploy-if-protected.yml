@@ -1,0 +1,27 @@
+spec:
+  inputs:
+    environment-deployment-tier:
+      type: string
+      description: The deployment tier (testing, staging, or production)
+      options:
+        - testing
+        - staging
+        - production
+    environment-name:
+      type: string
+      description: Name of the GitLab environment
+    when:
+      type: string
+      description: When to trigger the job (on_success or manual)
+      default: on_success
+      options:
+        - on_success
+        - manual
+---
+.deploy-if-protected:$[[ inputs.environment-deployment-tier ]]:$[[ inputs.environment-name ]]:
+  rules:
+    - if: $CI_COMMIT_BRANCH && $CI_COMMIT_REF_PROTECTED == "true"
+      when: $[[ inputs.when ]]
+  environment:
+    deployment_tier: $[[ inputs.environment-deployment-tier ]]
+    name: $[[ inputs.environment-name ]]
